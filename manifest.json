@@ -10,18 +10,16 @@
             "content.js"
          ],
          "matches": [
-            "https://*.youtube.com/*"
+            "https://*.youtube.com/*",
+            "https://*. youtube-nocookie.com/*"
          ]
       }
    ],
-   "description": "Youtube-Ad-blocker-Reminder-Remover",
+   "description": "Remove the Adblock Popup from YOUTUBE",
    "icons": {
       "128": "icon.png"
    },
    "manifest_version": 3,
-   "name": "Youtube-Ad-blocker-Reminder-Remover",
-   "permissions": [
-      "scripting"
-   ],
+   "name": "Remove Adblock Thing",
    "version": "1.0"
 }
