@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remove Adblock Thing
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.3
 // @description  Removes Adblock Thing
 // @author       JoelMatic
 // @match        https://www.youtube.com/*
@@ -62,11 +62,6 @@
     view: window,
   });
 
-  // Observe and remove ads when new content is loaded dynamically
-  const observer = new MutationObserver(() => {
-    removeJsonPaths(domainsToRemove, jsonPathsToRemove);
-  });
-
   //This is used to check if the video has been unpaused already
   let unpausedAfterSkip = 0;
 
@@ -77,7 +72,7 @@
 
   if (adblocker) addblocker();
   if (removePopup) popupRemover();
-  if (removePopup) observer.observe(document.body, observerConfig);
+  //if (removePopup) observer.observe(document.body, observerConfig);
 
   // Remove Them pesski popups
   function popupRemover() {
@@ -137,63 +132,101 @@
   }
   // undetected adblocker method
   function addblocker() {
-    setInterval(() => {
-      const skipBtn = document.querySelector(
-        ".videoAdUiSkipButton,.ytp-ad-skip-button"
-      );
-      const ad = [...document.querySelectorAll(".ad-showing")][0];
-      const sidAd = document.querySelector("ytd-action-companion-ad-renderer");
-      const displayAd = document.querySelector(
-        "div#root.style-scope.ytd-display-ad-renderer.yt-simple-endpoint"
-      );
-      const sparklesContainer = document.querySelector(
-        "div#sparkles-container.style-scope.ytd-promoted-sparkles-web-renderer"
-      );
-      const mainContainer = document.querySelector(
-        "div#main-container.style-scope.ytd-promoted-video-renderer"
-      );
-      const feedAd = document.querySelector("ytd-in-feed-ad-layout-renderer");
-      const mastheadAd = document.querySelector(
-        ".ytd-video-masthead-ad-v3-renderer"
-      );
-      const sponsor = document.querySelectorAll(
-        "div#player-ads.style-scope.ytd-watch-flexy, div#panels.style-scope.ytd-watch-flexy"
-      );
-      const nonVid = document.querySelector(".ytp-ad-skip-button-modern");
+    // Do not display as they will be deleted
+    const css = `
+            .ad-showing, .videoAdUiSkipButton, .ytp-ad-skip-button, .ytp-ad-skip-button-modern { display: none; }
+            ytd-action-companion-ad-renderer { display: none; }
+            div#root.style-scope.ytd-display-ad-renderer.yt-simple-endpoint { display: none; }
+            div#sparkles-container.style-scope.ytd-promoted-sparkles-web-renderer { display: none; }
+            div#main-container.style-scope.ytd-promoted-video-renderer { display: none; }
+            ytd-in-feed-ad-layout-renderer { display: none; }
+            .ytd-video-masthead-ad-v3-renderer { display: none; }
+            ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"] { display: none; }
+            ytd-merch-shelf-renderer { display: none; }
+            .ytd-banner-promo-renderer { display: none; }
+            ytd-statement-banner-renderer { display: none; }
+        `;
+    const head = document.head || document.getElementsByTagName("head")[0];
+    const styleElement = document.createElement("style");
+    styleElement.type = "text/css";
+    styleElement.id = "adSkip"; // for debug: document.querySelector('#adSkip').remove()
+    styleElement.innerHTML = css;
+    head.appendChild(styleElement);
 
-      if (ad) {
-        const video = document.querySelector("video");
-        video.playbackRate = 10;
-        video.volume = 0;
-        video.currentTime = video.duration;
-        skipBtn?.click();
-      }
-
-      sidAd?.remove();
-      displayAd?.remove();
-      sparklesContainer?.remove();
-      mainContainer?.remove();
-      feedAd?.remove();
-      mastheadAd?.remove();
-      sponsor?.forEach((element) => {
-        if (element.getAttribute("id") === "panels") {
-          element.childNodes?.forEach((childElement) => {
-            if (
-              childElement.data &&
-              childElement.data.targetId &&
-              childElement.data.targetId !==
-                "engagement-panel-macro-markers-description-chapters"
-            )
-              //Skipping the Chapters section
-              childElement.remove();
-          });
-        } else {
-          element.remove();
-        }
-      });
-      nonVid?.click();
-    }, 50);
+    handleAds();
   }
+
+  function handleAds() {
+    const skipBtnSelector = ".videoAdUiSkipButton, .ytp-ad-skip-button";
+    const adSelector = ".ad-showing";
+    const adRemovalSelectors = [
+      "ytd-action-companion-ad-renderer",
+      "div#root.style-scope.ytd-display-ad-renderer.yt-simple-endpoint",
+      "div#sparkles-container.style-scope.ytd-promoted-sparkles-web-renderer",
+      "div#main-container.style-scope.ytd-promoted-video-renderer",
+      "ytd-in-feed-ad-layout-renderer",
+      ".ytd-video-masthead-ad-v3-renderer",
+      'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]',
+      "ytd-merch-shelf-renderer", // Remove store stuff below videos : https://www.zupimages.net/up/23/45/1npf.png
+      ".ytd-banner-promo-renderer", // Removes the large banner that occasionally appears at the top of the home page offering to subscribe to Premium
+      "ytd-statement-banner-renderer", // removes large banners that occasionally appear in content on the home page offering to subscribe to Premium
+    ];
+    const sponsorSelectors = [
+      "div#player-ads.style-scope.ytd-watch-flexy",
+      "div#panels.style-scope.ytd-watch-flexy",
+    ];
+    const nonVidSelector = ".ytp-ad-skip-button-modern";
+
+    const observerCallback = (mutationsList, observer) => {
+      removeJsonPaths(domainsToRemove, jsonPathsToRemove);
+      for (const mutation of mutationsList) {
+        if (mutation.addedNodes.length > 0) {
+          const video = document.querySelector("video");
+          const skipBtn = document.querySelector(skipBtnSelector);
+          const ad = document.querySelector(adSelector);
+
+          if (ad) {
+            video.playbackRate = 10;
+            video.volume = 0;
+            //video.currentTime = video.duration;
+            skipBtn?.click();
+          }
+
+          for (const removalSelector of adRemovalSelectors) {
+            const element = document.querySelector(removalSelector);
+            element?.remove();
+          }
+
+          const sponsorElements = document.querySelectorAll(
+            sponsorSelectors.join(", ")
+          );
+          sponsorElements.forEach((element) => {
+            if (element.getAttribute("id") === "panels") {
+              element.childNodes?.forEach((childElement) => {
+                if (
+                  childElement.data?.targetId &&
+                  childElement.data.targetId !==
+                    "engagement-panel-macro-markers-description-chapters"
+                ) {
+                  //Skipping the Chapters section
+                  childElement.remove();
+                }
+              });
+            } else {
+              element.remove();
+            }
+          });
+
+          const nonVid = document.querySelector(nonVidSelector);
+          nonVid?.click();
+        }
+      }
+    };
+
+    const observer = new MutationObserver(observerCallback);
+    observer.observe(document.body, observerConfig);
+  }
+
   // Unpause the video Works most of the time
   function unPauseVideo(video) {
     if (!video) return;
